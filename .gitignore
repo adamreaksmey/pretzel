@@ -1,2 +1,5 @@
 .cursor
 .plan
+node_modules
+dist
+.turbo

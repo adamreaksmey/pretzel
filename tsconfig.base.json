@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@pretzel/types": [
+        "packages/types/src/index.ts"
+      ],
+      "@pretzel/sdk": [
+        "packages/sdk/src/index.ts"
+      ],
+      "@pretzel/redis": [
+        "libs/redis/src/index.ts"
+      ]
+    }
+  }
+}
