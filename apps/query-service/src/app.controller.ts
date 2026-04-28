@@ -7,6 +7,14 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
+import {
+  ApiBody,
+  ApiHeader,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { UserPresence } from '@pretzel/types';
 import { AppService } from './app.service';
 
@@ -14,14 +22,34 @@ const TENANT_ID_HEADER = 'x-tenant-id';
 const API_KEY_HEADER = 'x-api-key';
 const TENANT_API_KEY_PREFIX = 'tenant:';
 
-interface PresenceBatchBody {
-  userIds: string[];
+class PresenceBatchBodyDto {
+  userIds!: string[];
 }
 
+class UserPresenceDto {
+  userId!: string;
+  status!: 'online' | 'offline';
+  last_seen!: string | null;
+}
+
+@ApiTags('presence')
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
+  @ApiOperation({ summary: 'Get presence for a single user' })
+  @ApiParam({ name: 'userId', description: 'Target user id' })
+  @ApiHeader({
+    name: TENANT_ID_HEADER,
+    required: false,
+    description: 'Tenant scope header',
+  })
+  @ApiHeader({
+    name: API_KEY_HEADER,
+    required: false,
+    description: 'Tenant API key in format tenant:<tenantId>',
+  })
+  @ApiOkResponse({ type: UserPresenceDto })
   @Get('presence/:userId')
   getPresence(
     @Headers(TENANT_ID_HEADER) tenantHeader: string | undefined,
@@ -33,11 +61,24 @@ export class AppController {
     return this.appService.getPresence(tenantId, normalizedUserId);
   }
 
+  @ApiOperation({ summary: 'Get presence for multiple users' })
+  @ApiHeader({
+    name: TENANT_ID_HEADER,
+    required: false,
+    description: 'Tenant scope header',
+  })
+  @ApiHeader({
+    name: API_KEY_HEADER,
+    required: false,
+    description: 'Tenant API key in format tenant:<tenantId>',
+  })
+  @ApiBody({ type: PresenceBatchBodyDto })
+  @ApiOkResponse({ type: UserPresenceDto, isArray: true })
   @Post('presence/batch')
   async getPresenceBatch(
     @Headers(TENANT_ID_HEADER) tenantHeader: string | undefined,
     @Headers(API_KEY_HEADER) apiKeyHeader: string | undefined,
-    @Body() requestBody: PresenceBatchBody,
+    @Body() requestBody: PresenceBatchBodyDto,
   ): Promise<UserPresence[]> {
     const tenantId = this.resolveTenantId(tenantHeader, apiKeyHeader);
     const userIds = this.normalizeUserIds(requestBody);
@@ -75,7 +116,7 @@ export class AppController {
     );
   }
 
-  private normalizeUserIds(requestBody: PresenceBatchBody): string[] {
+  private normalizeUserIds(requestBody: PresenceBatchBodyDto): string[] {
     if (!requestBody || !Array.isArray(requestBody.userIds)) {
       throw new BadRequestException('Request body must include userIds array.');
     }

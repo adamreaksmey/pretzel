@@ -48,12 +48,11 @@ describe('AppService reliability', () => {
       return Promise.resolve(null);
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const tenantAPresence = await appService.getPresence(
       'tenant-a',
       'shared-user',
     );
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
     const tenantBPresence = await appService.getPresence(
       'tenant-b',
       'shared-user',
