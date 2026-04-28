@@ -1,0 +1,39 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: pretzel-redis
+    command: redis-server --appendonly no --notify-keyspace-events Ex
+    ports:
+      - "6379:6379"
+
+  query-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: query-service
+    container_name: pretzel-query-service
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      PORT: ${PORT:-3000}
+    ports:
+      - "3000:3000"
+
+  ws-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ws-service
+    container_name: pretzel-ws-service
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      WS_SERVICE_PORT: ${WS_SERVICE_PORT:-3001}
+    ports:
+      - "3001:3001"

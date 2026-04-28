@@ -104,6 +104,7 @@ function Badge({ userId }: { userId: string }) {
 
 ```bash
 npm install
+cp .env.example .env
 ```
 
 ### Run services
@@ -115,6 +116,18 @@ npm run start:dev -w query-service
 # ws-service
 npm run start:dev -w @pretzel/ws-service
 ```
+
+### Run with Docker
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Services:
+- query-service: `http://localhost:3000` (`/docs` for Swagger)
+- ws-service: `http://localhost:3001` (`/docs` for minimal HTTP docs)
+- redis: `localhost:6379` with `notify-keyspace-events Ex`
 
 ### Workspace checks
 

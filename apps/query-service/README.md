@@ -65,8 +65,14 @@ Response:
 ## Run
 
 ```bash
+cp .env.example .env
 npm run start:dev -w query-service
 ```
+
+## Environment
+
+- `REDIS_URL` Redis connection string
+- `PORT` query-service HTTP port
 
 ## Test
 

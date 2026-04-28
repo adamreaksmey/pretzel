@@ -51,8 +51,14 @@ Realtime ingestion and broadcast service for Pretzel presence.
 ## Run
 
 ```bash
+cp .env.example .env
 npm run start:dev -w @pretzel/ws-service
 ```
+
+## Environment
+
+- `REDIS_URL` Redis connection string
+- `WS_SERVICE_PORT` ws-service HTTP/Socket.IO port
 
 ## Test
 
