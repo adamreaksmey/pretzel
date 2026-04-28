@@ -15,6 +15,7 @@ import {
   SESSION_HASH_TENANT_ID_FIELD,
   SESSION_HASH_USER_ID_FIELD,
   SESSION_TTL_SECONDS,
+  TYPING_TTL_SECONDS,
 } from './constants';
 import type {
   ConnectionContext,
@@ -125,6 +126,34 @@ export class PresenceService {
       identity.tenantId,
       identity.userId,
     );
+  }
+
+  async startTyping(tenantId: string, userId: string): Promise<void> {
+    const typingStorageKey = typingKey(tenantId, userId);
+    const typingTtlSeconds = String(TYPING_TTL_SECONDS);
+    const initialTypingSetResult = await redisClient.set(
+      typingStorageKey,
+      '1',
+      'EX',
+      typingTtlSeconds,
+      'NX',
+    );
+    if (initialTypingSetResult === 'OK') {
+      this.publishEvent('typing_start', tenantId, userId);
+      return;
+    }
+
+    await redisClient.expire(typingStorageKey, typingTtlSeconds);
+  }
+
+  async stopTyping(tenantId: string, userId: string): Promise<void> {
+    const typingStorageKey = typingKey(tenantId, userId);
+    const deletedTypingKeyCount = await redisClient.del(typingStorageKey);
+    if (deletedTypingKeyCount === 0) {
+      return;
+    }
+
+    this.publishEvent('typing_stop', tenantId, userId);
   }
 
   private async processExpiredKey(expiredKey: string): Promise<void> {

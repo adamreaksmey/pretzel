@@ -19,6 +19,8 @@ import type {
 
 const ROOM_PREFIX = 'tenant';
 const PING_EVENT = 'ping';
+const START_TYPING_EVENT = 'startTyping';
+const STOP_TYPING_EVENT = 'stopTyping';
 const SESSION_ASSIGNED_EVENT = 'session_assigned';
 const ERROR_EVENT = 'error';
 const LOGGER_CONTEXT = 'PresenceGateway';
@@ -92,6 +94,32 @@ export class PresenceGateway
     await this.presenceService.cleanupSession(connection.sessionId);
     this.connectionBySocketId.delete(client.id);
     client.disconnect(true);
+  }
+
+  @SubscribeMessage(START_TYPING_EVENT)
+  async handleStartTyping(@ConnectedSocket() client: Socket): Promise<void> {
+    const connection = this.connectionBySocketId.get(client.id);
+    if (!connection) {
+      return;
+    }
+
+    await this.presenceService.startTyping(
+      connection.tenantId,
+      connection.userId,
+    );
+  }
+
+  @SubscribeMessage(STOP_TYPING_EVENT)
+  async handleStopTyping(@ConnectedSocket() client: Socket): Promise<void> {
+    const connection = this.connectionBySocketId.get(client.id);
+    if (!connection) {
+      return;
+    }
+
+    await this.presenceService.stopTyping(
+      connection.tenantId,
+      connection.userId,
+    );
   }
 
   private publishEvent(event: TenantPresenceEvent): void {
