@@ -160,14 +160,23 @@ export class PresenceService {
       throw new Error('Redis transaction did not return a valid array.');
     }
 
-    const resultEntry = reply[index];
-    if (!Array.isArray(resultEntry) || typeof resultEntry[1] !== 'number') {
+    const replyEntries = reply as unknown[];
+    const resultEntry: unknown = replyEntries[index];
+    if (!this.isIntegerReplyEntry(resultEntry)) {
       throw new Error(
         'Redis transaction returned an invalid integer response.',
       );
     }
 
     return resultEntry[1];
+  }
+
+  private isIntegerReplyEntry(entry: unknown): entry is [unknown, number] {
+    if (!Array.isArray(entry) || entry.length < 2) {
+      return false;
+    }
+
+    return typeof entry[1] === 'number';
   }
 
   private async resolveSessionIdentity(
