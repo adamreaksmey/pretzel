@@ -8,7 +8,7 @@ export const redisKeyPrefixes = {
   session: "session",
   userSessions: "user_sessions",
   lastSeen: "last_seen",
-  typing: "typing"
+  typing: "typing",
 } as const;
 
 let sharedRedisClient: Redis | null = null;
@@ -44,7 +44,9 @@ export function typingKey(tenantId: string, userId: string): string {
   return [redisKeyPrefixes.typing, tenantId, userId].join(KEY_SEPARATOR);
 }
 
-export function hasRequiredKeyspaceNotifications(setting: string | null): boolean {
+export function hasRequiredKeyspaceNotifications(
+  setting: string | null,
+): boolean {
   if (!setting) {
     return false;
   }
@@ -53,11 +55,11 @@ export function hasRequiredKeyspaceNotifications(setting: string | null): boolea
 }
 
 export async function assertKeyspaceNotificationsEnabled(
-  client: Redis = redisClient
+  client: Redis = redisClient,
 ): Promise<void> {
   const notificationSetting = (await client.config(
     "GET",
-    "notify-keyspace-events"
+    "notify-keyspace-events",
   )) as string[];
   const configuredValue = notificationSetting[1] ?? "";
 
@@ -66,6 +68,6 @@ export async function assertKeyspaceNotificationsEnabled(
   }
 
   throw new Error(
-    `Redis notify-keyspace-events must include ${REQUIRED_KEYSPACE_FLAGS.join("")}. Current: "${configuredValue}".`
+    `Redis notify-keyspace-events must include ${REQUIRED_KEYSPACE_FLAGS.join("")}. Current: "${configuredValue}".`,
   );
 }

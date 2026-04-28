@@ -1,10 +1,12 @@
-import { Logger } from "@nestjs/common";
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
 
-const serviceName = "query-service";
-const bootstrapMessage = "Query service scaffold is ready";
-
-async function bootstrapQueryService(): Promise<void> {
-  Logger.log(bootstrapMessage, serviceName);
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(process.env.PORT ?? 3000);
 }
 
-void bootstrapQueryService();
+bootstrap().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

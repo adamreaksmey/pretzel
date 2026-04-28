@@ -1,7 +1,8 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { PresenceClient } from "@pretzel/sdk";
 
-const missingProviderErrorMessage = "PresenceProvider is required to use this hook";
+const missingProviderErrorMessage =
+  "PresenceProvider is required to use this hook";
 
 const PresenceClientContext = createContext<PresenceClient | null>(null);
 
@@ -11,7 +12,11 @@ interface PresenceProviderProps {
 }
 
 export function PresenceProvider({ client, children }: PresenceProviderProps) {
-  return <PresenceClientContext.Provider value={client}>{children}</PresenceClientContext.Provider>;
+  return (
+    <PresenceClientContext.Provider value={client}>
+      {children}
+    </PresenceClientContext.Provider>
+  );
 }
 
 export function usePresenceClient(): PresenceClient {

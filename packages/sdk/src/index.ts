@@ -13,7 +13,10 @@ export class PresenceClient {
 
   disconnect(): void {}
 
-  subscribeToUser(_userId: string, _callback: PresenceSubscription): () => void {
+  subscribeToUser(
+    _userId: string,
+    _callback: PresenceSubscription,
+  ): () => void {
     return () => {};
   }
 
@@ -21,7 +24,7 @@ export class PresenceClient {
     return {
       userId: "",
       status: "offline",
-      last_seen: null
+      last_seen: null,
     };
   }
 

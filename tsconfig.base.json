@@ -8,18 +8,14 @@
     "declaration": true,
     "declarationMap": true,
     "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@pretzel/types": [
-        "packages/types/src/index.ts"
-      ],
-      "@pretzel/sdk": [
-        "packages/sdk/src/index.ts"
-      ],
-      "@pretzel/redis": [
-        "libs/redis/src/index.ts"
-      ]
+      "@pretzel/types": ["packages/types/src/index.ts"],
+      "@pretzel/sdk": ["packages/sdk/src/index.ts"],
+      "@pretzel/redis": ["libs/redis/src/index.ts"]
     }
   }
 }
