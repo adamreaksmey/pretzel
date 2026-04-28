@@ -9,8 +9,8 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
+import { ApiKeyValidationService } from './api-key-validation.service';
 import { PresenceService } from './presence.service';
-import { resolveTenantIdFromApiKey } from './tenant-resolver';
 import type {
   ConnectionAuthPayload,
   ConnectionContext,
@@ -35,7 +35,10 @@ export class PresenceGateway
   private readonly logger = new Logger(LOGGER_CONTEXT);
   private readonly connectionBySocketId = new Map<string, ConnectionContext>();
 
-  constructor(private readonly presenceService: PresenceService) {}
+  constructor(
+    private readonly apiKeyValidationService: ApiKeyValidationService,
+    private readonly presenceService: PresenceService,
+  ) {}
 
   async afterInit(): Promise<void> {
     this.presenceService.setEventPublisher((event) => {
@@ -48,7 +51,7 @@ export class PresenceGateway
     const authPayload = client.handshake.auth as ConnectionAuthPayload;
     const apiKey = this.readText(authPayload.apiKey);
     const userId = this.readText(authPayload.userId);
-    const tenantId = resolveTenantIdFromApiKey(apiKey);
+    const tenantId = await this.apiKeyValidationService.validateApiKey(apiKey);
     if (!tenantId || !userId) {
       client.emit(ERROR_EVENT, { message: 'Invalid connection auth payload.' });
       client.disconnect(true);

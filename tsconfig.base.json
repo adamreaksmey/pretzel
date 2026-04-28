@@ -15,7 +15,8 @@
     "paths": {
       "@pretzel/types": ["packages/types/src/index.ts"],
       "@pretzel/sdk": ["packages/sdk/src/index.ts"],
-      "@pretzel/redis": ["libs/redis/src/index.ts"]
+      "@pretzel/redis": ["libs/redis/src/index.ts"],
+      "@pretzel/auth": ["libs/auth/src/index.ts"]
     }
   }
 }

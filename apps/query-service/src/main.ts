@@ -13,18 +13,9 @@ async function bootstrap() {
         type: 'apiKey',
         in: 'header',
         name: 'x-api-key',
-        description: 'Tenant API key in the format tenant:<tenantId>',
+        description: 'Issued API key for tenant authentication.',
       },
       'x-api-key',
-    )
-    .addApiKey(
-      {
-        type: 'apiKey',
-        in: 'header',
-        name: 'x-tenant-id',
-        description: 'Optional explicit tenant override header',
-      },
-      'x-tenant-id',
     )
     .build();
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);

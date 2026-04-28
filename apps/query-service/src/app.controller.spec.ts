@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import type { AuthenticatedRequest } from './auth/authenticated-request';
+import { PresenceService } from './app.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -12,7 +13,7 @@ describe('AppController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
-      providers: [{ provide: AppService, useValue: appServiceMock }],
+      providers: [{ provide: PresenceService, useValue: appServiceMock }],
     }).compile();
 
     appController = app.get<AppController>(AppController);
@@ -27,11 +28,8 @@ describe('AppController', () => {
     };
     appServiceMock.getPresence.mockResolvedValue(expectedPresence);
 
-    const response = await appController.getPresence(
-      'tenant-a',
-      undefined,
-      'alice',
-    );
+    const request = { tenantId: 'tenant-a' } as AuthenticatedRequest;
+    const response = await appController.getPresence(request, 'alice');
 
     expect(appServiceMock.getPresence).toHaveBeenCalledWith(
       'tenant-a',
@@ -40,20 +38,17 @@ describe('AppController', () => {
     expect(response).toEqual(expectedPresence);
   });
 
-  it('returns batch presence using api key fallback', async () => {
+  it('returns batch presence using resolved tenant context', async () => {
     const expectedPresence = [
       { userId: 'alice', status: 'online', last_seen: null },
       { userId: 'bob', status: 'offline', last_seen: null },
     ];
     appServiceMock.getPresenceBatch.mockResolvedValue(expectedPresence);
 
-    const response = await appController.getPresenceBatch(
-      undefined,
-      'tenant:dev',
-      {
-        userIds: ['alice', 'bob'],
-      },
-    );
+    const request = { tenantId: 'dev' } as AuthenticatedRequest;
+    const response = await appController.getPresenceBatch(request, {
+      userIds: ['alice', 'bob'],
+    });
 
     expect(appServiceMock.getPresenceBatch).toHaveBeenCalledWith('dev', [
       'alice',

@@ -3,7 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
-import { AppService } from '../src/app.service';
+import { PresenceService } from '../src/app.service';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -16,7 +16,7 @@ describe('AppController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(AppService)
+      .overrideProvider(PresenceService)
       .useValue(appServiceMock)
       .compile();
 
@@ -34,7 +34,7 @@ describe('AppController (e2e)', () => {
 
     return request(app.getHttpServer())
       .get('/presence/user-1')
-      .set('x-tenant-id', 'tenant-a')
+      .set('x-api-key', 'invalid-key')
       .expect(200)
       .expect({
         userId: 'user-1',
@@ -50,7 +50,7 @@ describe('AppController (e2e)', () => {
 
     return request(app.getHttpServer())
       .post('/presence/batch')
-      .set('x-api-key', 'tenant:tenant-a')
+      .set('x-api-key', 'invalid-key')
       .send({ userIds: ['user-1'] })
       .expect(201)
       .expect([{ userId: 'user-1', status: 'online', last_seen: null }]);

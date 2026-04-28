@@ -1,4 +1,16 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pretzel-postgres
+    environment:
+      POSTGRES_DB: pretzel
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pretzel-postgres-data:/var/lib/postgresql/data
+
   redis:
     image: redis:7-alpine
     container_name: pretzel-redis
@@ -13,11 +25,13 @@ services:
       target: query-service
     container_name: pretzel-query-service
     depends_on:
+      - postgres
       - redis
     env_file:
       - .env
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/pretzel}
       PORT: ${PORT:-3000}
     ports:
       - "3000:3000"
@@ -29,11 +43,16 @@ services:
       target: ws-service
     container_name: pretzel-ws-service
     depends_on:
+      - postgres
       - redis
     env_file:
       - .env
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/pretzel}
       WS_SERVICE_PORT: ${WS_SERVICE_PORT:-3001}
     ports:
       - "3001:3001"
+
+volumes:
+  pretzel-postgres-data:

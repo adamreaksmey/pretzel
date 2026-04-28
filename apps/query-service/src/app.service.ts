@@ -10,7 +10,7 @@ interface PresenceReadRedisClient {
 const typedRedisClient = redisClient as unknown as PresenceReadRedisClient;
 
 @Injectable()
-export class AppService {
+export class PresenceService {
   async getPresence(tenantId: string, userId: string): Promise<UserPresence> {
     const [sessionCount, lastSeen] = await Promise.all([
       typedRedisClient.scard(userSessionsKey(tenantId, userId)),

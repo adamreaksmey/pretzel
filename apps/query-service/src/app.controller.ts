@@ -3,9 +3,9 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Post,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBody,
@@ -16,11 +16,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { UserPresence } from '@pretzel/types';
-import { AppService } from './app.service';
-
-const TENANT_ID_HEADER = 'x-tenant-id';
-const API_KEY_HEADER = 'x-api-key';
-const TENANT_API_KEY_PREFIX = 'tenant:';
+import type { AuthenticatedRequest } from './auth/authenticated-request';
+import { PresenceService } from './app.service';
 
 class PresenceBatchBodyDto {
   userIds!: string[];
@@ -35,52 +32,32 @@ class UserPresenceDto {
 @ApiTags('presence')
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(private readonly appService: PresenceService) {}
 
   @ApiOperation({ summary: 'Get presence for a single user' })
   @ApiParam({ name: 'userId', description: 'Target user id' })
-  @ApiHeader({
-    name: TENANT_ID_HEADER,
-    required: false,
-    description: 'Tenant scope header',
-  })
-  @ApiHeader({
-    name: API_KEY_HEADER,
-    required: false,
-    description: 'Tenant API key in format tenant:<tenantId>',
-  })
+  @ApiHeader({ name: 'x-api-key', required: true })
   @ApiOkResponse({ type: UserPresenceDto })
   @Get('presence/:userId')
   getPresence(
-    @Headers(TENANT_ID_HEADER) tenantHeader: string | undefined,
-    @Headers(API_KEY_HEADER) apiKeyHeader: string | undefined,
+    @Req() request: AuthenticatedRequest,
     @Param('userId') userId: string,
   ): Promise<UserPresence> {
-    const tenantId = this.resolveTenantId(tenantHeader, apiKeyHeader);
+    const tenantId = this.readTenantId(request);
     const normalizedUserId = this.normalizeRequiredValue(userId, 'userId');
     return this.appService.getPresence(tenantId, normalizedUserId);
   }
 
   @ApiOperation({ summary: 'Get presence for multiple users' })
-  @ApiHeader({
-    name: TENANT_ID_HEADER,
-    required: false,
-    description: 'Tenant scope header',
-  })
-  @ApiHeader({
-    name: API_KEY_HEADER,
-    required: false,
-    description: 'Tenant API key in format tenant:<tenantId>',
-  })
+  @ApiHeader({ name: 'x-api-key', required: true })
   @ApiBody({ type: PresenceBatchBodyDto })
   @ApiOkResponse({ type: UserPresenceDto, isArray: true })
   @Post('presence/batch')
   async getPresenceBatch(
-    @Headers(TENANT_ID_HEADER) tenantHeader: string | undefined,
-    @Headers(API_KEY_HEADER) apiKeyHeader: string | undefined,
+    @Req() request: AuthenticatedRequest,
     @Body() requestBody: PresenceBatchBodyDto,
   ): Promise<UserPresence[]> {
-    const tenantId = this.resolveTenantId(tenantHeader, apiKeyHeader);
+    const tenantId = this.readTenantId(request);
     const userIds = this.normalizeUserIds(requestBody);
     const presenceBatch: unknown = await this.appService.getPresenceBatch(
       tenantId,
@@ -92,28 +69,13 @@ export class AppController {
     return presenceBatch;
   }
 
-  private resolveTenantId(
-    tenantHeader: string | undefined,
-    apiKeyHeader: string | undefined,
-  ): string {
-    const tenantId = this.readOptionalText(tenantHeader);
+  private readTenantId(request: AuthenticatedRequest): string {
+    const tenantId = this.readOptionalText(request.tenantId);
     if (tenantId) {
       return tenantId;
     }
 
-    const apiKey = this.readOptionalText(apiKeyHeader);
-    if (apiKey?.startsWith(TENANT_API_KEY_PREFIX)) {
-      const resolvedTenantId = apiKey
-        .slice(TENANT_API_KEY_PREFIX.length)
-        .trim();
-      if (resolvedTenantId) {
-        return resolvedTenantId;
-      }
-    }
-
-    throw new BadRequestException(
-      'A tenant identifier is required via x-tenant-id or x-api-key.',
-    );
+    throw new BadRequestException('Tenant resolution failed for request.');
   }
 
   private normalizeUserIds(requestBody: PresenceBatchBodyDto): string[] {
