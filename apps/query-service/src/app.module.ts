@@ -22,7 +22,7 @@ function getRequiredDatabaseUrl(): string {
       type: 'postgres',
       url: getRequiredDatabaseUrl(),
       entities: [TenantEntity, ApiKeyEntity],
-      synchronize: true,
+      synchronize: process.env.APP_ENV === 'local',
     }),
     TenantModule,
     AuthModule,

@@ -1,5 +1,6 @@
 import {
   CreateDateColumn,
+  Index,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -7,14 +8,9 @@ import {
   Column,
 } from 'typeorm';
 import { TenantEntity } from '../tenant/tenant.entity';
-
-/**
- * every of my typeorm decorator is now throwing this lint error:
- * Unsafe call of a type that could not be resolved.eslint@typescript-eslint/no-unsafe-call
- *
- * something that's never happened before
- */
 @Entity({ name: 'api_keys' })
+@Index('IDX_api_keys_tenant_id', ['tenantId'])
+@Index('IDX_api_key', ['key'])
 export class ApiKeyEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
