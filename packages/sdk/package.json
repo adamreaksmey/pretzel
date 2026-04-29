@@ -1,6 +1,6 @@
 {
   "name": "@adamthedeveloper/pretzel-sdk",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "private": false,
   "type": "module",
   "main": "./dist/index.cjs",
@@ -16,6 +16,18 @@
   "files": [
     "dist",
     "README.md"
+  ],
+  "keywords": [
+    "presence",
+    "realtime",
+    "websocket",
+    "socket.io",
+    "typing-indicator",
+    "last-seen",
+    "online-status",
+    "typescript-sdk",
+    "multi-tenant",
+    "pretzel"
   ],
   "publishConfig": {
     "access": "public"

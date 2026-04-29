@@ -266,3 +266,5 @@ export function App() {
   - `ws://host` -> `http://host`
   - `wss://host` -> `https://host`
 - Presence read requests (`getPresence`, `getPresenceBatch`) are sent to that inferred HTTP base URL
+
+For platform setup and architecture details, see [`README.md`](./README.md).

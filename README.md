@@ -62,38 +62,11 @@ libs/
 
 ## For Developers (SDK Consumers)
 
-Use `@adamthedeveloper/pretzel-sdk` for direct integration and `@adamthedeveloper/pretzel-sdk-react` for React apps.
+SDK consumer docs now live in a dedicated guide:
 
-### SDK example
+- [`SDK-CONSUMERS.md`](./SDK-CONSUMERS.md)
 
-```ts
-import { PresenceClient } from "@adamthedeveloper/pretzel-sdk";
-
-const client = new PresenceClient();
-client.connect({
-  url: "ws://localhost:3001",
-  apiKey: "tenant:acme",
-  userId: "user-123",
-});
-
-const unsubscribe = client.subscribeToUser("user-456", (event) => {
-  console.log(event.type, event.userId);
-});
-```
-
-### React hooks example
-
-```tsx
-import {
-  PresenceProvider,
-  usePresence,
-} from "@adamthedeveloper/pretzel-sdk-react";
-
-function Badge({ userId }: { userId: string }) {
-  const presence = usePresence(userId);
-  return <span>{presence.status}</span>;
-}
-```
+This keeps package usage and integration examples in one place as SDK features evolve.
 
 ## For Contributors
 
