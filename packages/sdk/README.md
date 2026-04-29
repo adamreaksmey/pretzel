@@ -1,11 +1,11 @@
-# @pretzel/sdk
+# @adamthedeveloper/pretzel-sdk
 
 TypeScript SDK for Pretzel presence services.
 
 ## Usage
 
 ```ts
-import { PresenceClient } from "@pretzel/sdk";
+import { PresenceClient } from "@adamthedeveloper/pretzel-sdk";
 
 const client = new PresenceClient();
 client.connect({

@@ -16,7 +16,7 @@ import {
   ApiProperty,
   ApiTags,
 } from '@nestjs/swagger';
-import type { UserPresence } from '@pretzel/types';
+import type { UserPresence } from '@adamthedeveloper/pretzel-types';
 import type { AuthenticatedRequest } from './auth/authenticated-request';
 import { PresenceService } from './app.service';
 

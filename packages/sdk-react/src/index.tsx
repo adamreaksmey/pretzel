@@ -6,8 +6,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { PresenceClient } from "@pretzel/sdk";
-import type { PresenceEvent, PresenceStatus, UserPresence } from "@pretzel/types";
+import type { PresenceClient } from "@adamthedeveloper/pretzel-sdk";
+import type {
+  PresenceEvent,
+  PresenceStatus,
+  UserPresence,
+} from "@adamthedeveloper/pretzel-types";
 
 const missingProviderErrorMessage =
   "PresenceProvider is required to use this hook";

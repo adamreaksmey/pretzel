@@ -1,4 +1,4 @@
-import type { PresenceEvent } from '@pretzel/types';
+import type { PresenceEvent } from '@adamthedeveloper/pretzel-types';
 
 export interface SessionIdentity {
   tenantId: string;

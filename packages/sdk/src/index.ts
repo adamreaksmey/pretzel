@@ -1,4 +1,7 @@
-import type { PresenceEvent, UserPresence } from "@pretzel/types";
+import type {
+  PresenceEvent,
+  UserPresence,
+} from "@adamthedeveloper/pretzel-types";
 import { io, type Socket } from "socket.io-client";
 import {
   API_KEY_HEADER,

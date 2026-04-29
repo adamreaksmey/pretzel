@@ -62,12 +62,12 @@ libs/
 
 ## For Developers (SDK Consumers)
 
-Use `@pretzel/sdk` for direct integration and `@pretzel/sdk-react` for React apps.
+Use `@adamthedeveloper/pretzel-sdk` for direct integration and `@adamthedeveloper/pretzel-sdk-react` for React apps.
 
 ### SDK example
 
 ```ts
-import { PresenceClient } from "@pretzel/sdk";
+import { PresenceClient } from "@adamthedeveloper/pretzel-sdk";
 
 const client = new PresenceClient();
 client.connect({
@@ -84,7 +84,10 @@ const unsubscribe = client.subscribeToUser("user-456", (event) => {
 ### React hooks example
 
 ```tsx
-import { PresenceProvider, usePresence } from "@pretzel/sdk-react";
+import {
+  PresenceProvider,
+  usePresence,
+} from "@adamthedeveloper/pretzel-sdk-react";
 
 function Badge({ userId }: { userId: string }) {
   const presence = usePresence(userId);

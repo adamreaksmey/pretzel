@@ -13,8 +13,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@pretzel/types": ["packages/types/src/index.ts"],
-      "@pretzel/sdk": ["packages/sdk/src/index.ts"],
+      "@adamthedeveloper/pretzel-types": ["packages/types/src/index.ts"],
+      "@adamthedeveloper/pretzel-sdk": ["packages/sdk/src/index.ts"],
       "@pretzel/redis": ["libs/redis/src/index.ts"],
       "@pretzel/auth": ["libs/auth/src/index.ts"]
     }

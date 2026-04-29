@@ -1,4 +1,4 @@
-declare module '@pretzel/types' {
+declare module '@adamthedeveloper/pretzel-types' {
   export type PresenceStatus = 'online' | 'offline';
 
   export interface UserPresence {

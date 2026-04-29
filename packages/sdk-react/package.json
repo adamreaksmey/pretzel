@@ -1,6 +1,6 @@
 {
-  "name": "@pretzel/sdk-react",
-  "version": "0.1.0",
+  "name": "@adamthedeveloper/pretzel-sdk-react",
+  "version": "0.1.2",
   "private": false,
   "type": "module",
   "main": "./dist/index.cjs",
@@ -26,8 +26,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@pretzel/sdk": "0.1.0",
-    "@pretzel/types": "0.1.0"
+    "@adamthedeveloper/pretzel-sdk": "0.1.2",
+    "@adamthedeveloper/pretzel-types": "0.1.2"
   },
   "peerDependencies": {
     "react": "^19.0.0",

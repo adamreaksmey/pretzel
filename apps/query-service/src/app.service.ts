@@ -5,7 +5,7 @@ import {
   sessionKey,
   userSessionsKey,
 } from '@pretzel/redis';
-import type { UserPresence } from '@pretzel/types';
+import type { UserPresence } from '@adamthedeveloper/pretzel-types';
 
 interface PresenceReadRedisClient {
   scard(key: string): Promise<number>;

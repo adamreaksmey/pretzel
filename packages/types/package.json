@@ -1,6 +1,6 @@
 {
-  "name": "@pretzel/types",
-  "version": "0.1.0",
+  "name": "@adamthedeveloper/pretzel-types",
+  "version": "0.1.2",
   "private": false,
   "type": "module",
   "main": "./dist/index.cjs",
@@ -13,7 +13,9 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
