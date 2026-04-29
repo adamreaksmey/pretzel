@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { lastSeenKey, redisClient, userSessionsKey } from '@pretzel/redis';
 import type { UserPresence } from '@pretzel/types';
 
@@ -16,11 +16,17 @@ const typedRedisClient = redisClient as unknown as PresenceReadRedisClient;
 
 @Injectable()
 export class PresenceService {
+  private readonly logger = new Logger(PresenceService.name);
+
   async getPresence(tenantId: string, userId: string): Promise<UserPresence> {
-    const [sessionCount, lastSeen] = await Promise.all([
-      typedRedisClient.scard(userSessionsKey(tenantId, userId)),
-      typedRedisClient.get(lastSeenKey(tenantId, userId)),
-    ]);
+    const [sessionCount, lastSeen] = await this.withRedisTimeout(
+      'read single-user presence',
+      () =>
+        Promise.all([
+          typedRedisClient.scard(userSessionsKey(tenantId, userId)),
+          typedRedisClient.get(lastSeenKey(tenantId, userId)),
+        ]),
+    );
 
     return {
       userId,
@@ -43,7 +49,10 @@ export class PresenceService {
       redisPipeline.get(lastSeenKey(tenantId, userId));
     });
 
-    const pipelineReplies = await redisPipeline.exec();
+    const pipelineReplies = await this.withRedisTimeout(
+      'read batch presence pipeline',
+      () => redisPipeline.exec(),
+    );
     return userIds.map((userId, userIndex) => {
       const sessionCountReply = pipelineReplies[userIndex * 2];
       const lastSeenReply = pipelineReplies[userIndex * 2 + 1];
@@ -78,5 +87,27 @@ export class PresenceService {
       return reply[1];
     }
     return null;
+  }
+
+  private async withRedisTimeout<T>(
+    operationName: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const redisTimeoutMs = 3000;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Redis operation timed out: ${operationName}`));
+      }, redisTimeoutMs);
+    });
+
+    try {
+      return await Promise.race([operation(), timeoutPromise]);
+    } catch (error) {
+      this.logger.error(
+        `Redis operation failed: ${operationName}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new Error(`Redis operation failed: ${operationName}`);
+    }
   }
 }

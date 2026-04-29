@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { redisClient } from '@pretzel/redis';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
@@ -13,6 +13,8 @@ import { ApiKeyEntity } from './api-key.entity';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(getRepositoryToken(ApiKeyEntity))
     private readonly apiKeyRepository: Repository<ApiKeyEntity>,
@@ -77,13 +79,37 @@ export class AuthService {
       throw new NotFoundException('API key not found for tenant.');
     }
 
-    await redisClient.publish(
-      'auth.revoked',
-      JSON.stringify({
-        tenantId,
-        revokedAt: new Date().toISOString(),
-      }),
+    await this.withRedisTimeout('publish auth revocation', () =>
+      redisClient.publish(
+        'auth.revoked',
+        JSON.stringify({
+          tenantId,
+          revokedAt: new Date().toISOString(),
+        }),
+      ),
     );
     return { tenantId };
+  }
+
+  private async withRedisTimeout<T>(
+    operationName: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const redisTimeoutMs = 3000;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Redis operation timed out: ${operationName}`));
+      }, redisTimeoutMs);
+    });
+
+    try {
+      return await Promise.race([operation(), timeoutPromise]);
+    } catch (error) {
+      this.logger.error(
+        `Redis operation failed: ${operationName}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new Error(`Redis operation failed: ${operationName}`);
+    }
   }
 }

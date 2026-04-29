@@ -31,6 +31,8 @@ const HANDSHAKE_RATE_LIMIT_KEY_PREFIX = 'ratelimit:handshake';
 const HANDSHAKE_WINDOW_SECONDS = 60;
 const HANDSHAKE_MAX_ATTEMPTS = 10;
 const TOO_MANY_REQUESTS_CODE = 429;
+const REDIS_TIMEOUT_MS = 3000;
+const MIN_HEARTBEAT_INTERVAL_MS = 5000;
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class PresenceGateway
@@ -41,6 +43,7 @@ export class PresenceGateway
 
   private readonly logger = new Logger(LOGGER_CONTEXT);
   private readonly connectionBySocketId = new Map<string, ConnectionContext>();
+  private readonly lastPingAtBySessionId = new Map<string, number>();
   private readonly revocationSubscriptionClient: Redis;
 
   constructor(
@@ -55,7 +58,9 @@ export class PresenceGateway
       this.publishEvent(event);
     });
     await this.presenceService.startExpiryListener();
-    await this.revocationSubscriptionClient.subscribe(REVOCATION_EVENT_CHANNEL);
+    await this.withRedisTimeout('subscribe auth.revoked channel', () =>
+      this.revocationSubscriptionClient.subscribe(REVOCATION_EVENT_CHANNEL),
+    );
     this.revocationSubscriptionClient.on('message', (channel, payload) => {
       if (channel !== REVOCATION_EVENT_CHANNEL) {
         return;
@@ -102,6 +107,7 @@ export class PresenceGateway
     }
 
     await this.presenceService.cleanupSession(connection.sessionId);
+    this.lastPingAtBySessionId.delete(connection.sessionId);
     this.connectionBySocketId.delete(client.id);
   }
 
@@ -111,6 +117,14 @@ export class PresenceGateway
     if (!connection) {
       return;
     }
+
+    const now = Date.now();
+    const lastPingAt =
+      this.lastPingAtBySessionId.get(connection.sessionId) ?? 0;
+    if (now - lastPingAt < MIN_HEARTBEAT_INTERVAL_MS) {
+      return;
+    }
+    this.lastPingAtBySessionId.set(connection.sessionId, now);
 
     const heartbeatUpdated = await this.presenceService.refreshSessionHeartbeat(
       connection.sessionId,
@@ -123,6 +137,7 @@ export class PresenceGateway
       `Heartbeat refresh failed for session ${connection.sessionId}.`,
     );
     await this.presenceService.cleanupSession(connection.sessionId);
+    this.lastPingAtBySessionId.delete(connection.sessionId);
     this.connectionBySocketId.delete(client.id);
     client.disconnect(true);
   }
@@ -191,11 +206,37 @@ export class PresenceGateway
 
   private async isHandshakeRateLimited(clientIp: string): Promise<boolean> {
     const rateLimitKey = `${HANDSHAKE_RATE_LIMIT_KEY_PREFIX}:${clientIp}`;
-    const attemptCount = await redisClient.incr(rateLimitKey);
+    const attemptCount = await this.withRedisTimeout(
+      'increment handshake rate limit',
+      () => redisClient.incr(rateLimitKey),
+    );
     if (attemptCount === 1) {
-      await redisClient.expire(rateLimitKey, HANDSHAKE_WINDOW_SECONDS);
+      await this.withRedisTimeout('set handshake rate limit ttl', () =>
+        redisClient.expire(rateLimitKey, HANDSHAKE_WINDOW_SECONDS),
+      );
     }
     return attemptCount > HANDSHAKE_MAX_ATTEMPTS;
+  }
+
+  private async withRedisTimeout<T>(
+    operationName: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Redis operation timed out: ${operationName}`));
+      }, REDIS_TIMEOUT_MS);
+    });
+
+    try {
+      return await Promise.race([operation(), timeoutPromise]);
+    } catch (error) {
+      this.logger.error(
+        `Redis operation failed: ${operationName}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new Error(`Redis operation failed: ${operationName}`);
+    }
   }
 
   private readClientIp(client: Socket): string {
