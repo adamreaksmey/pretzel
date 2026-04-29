@@ -1,8 +1,17 @@
-import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Param,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBody,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOperation,
+  ApiParam,
   ApiProperty,
   ApiTags,
 } from '@nestjs/swagger';
@@ -38,5 +47,19 @@ export class AuthController {
     }
 
     return this.authService.issueApiKey(tenantId);
+  }
+
+  @ApiOperation({ summary: 'Revoke API key for a tenant' })
+  @ApiParam({ name: 'tenantId', description: 'Tenant id owning the API key.' })
+  @ApiNoContentResponse({ description: 'API key revoked and sockets drained.' })
+  @Delete('keys/:tenantId')
+  async revokeApiKey(@Param('tenantId') tenantIdParam: string): Promise<void> {
+    const tenantId =
+      typeof tenantIdParam === 'string' ? tenantIdParam.trim() : '';
+    if (!tenantId) {
+      throw new BadRequestException('tenantId must be a non-empty string.');
+    }
+
+    await this.authService.revokeApiKey(tenantId);
   }
 }

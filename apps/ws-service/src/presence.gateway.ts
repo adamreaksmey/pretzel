@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { redisClient } from '@pretzel/redis';
 import {
   ConnectedSocket,
   OnGatewayConnection,
@@ -9,6 +10,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
+import type { Redis } from 'ioredis';
 import { ApiKeyValidationService } from './api-key-validation.service';
 import { PresenceService } from './presence.service';
 import type {
@@ -24,6 +26,11 @@ const STOP_TYPING_EVENT = 'stopTyping';
 const SESSION_ASSIGNED_EVENT = 'session_assigned';
 const ERROR_EVENT = 'error';
 const LOGGER_CONTEXT = 'PresenceGateway';
+const REVOCATION_EVENT_CHANNEL = 'auth.revoked';
+const HANDSHAKE_RATE_LIMIT_KEY_PREFIX = 'ratelimit:handshake';
+const HANDSHAKE_WINDOW_SECONDS = 60;
+const HANDSHAKE_MAX_ATTEMPTS = 10;
+const TOO_MANY_REQUESTS_CODE = 429;
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class PresenceGateway
@@ -34,20 +41,41 @@ export class PresenceGateway
 
   private readonly logger = new Logger(LOGGER_CONTEXT);
   private readonly connectionBySocketId = new Map<string, ConnectionContext>();
+  private readonly revocationSubscriptionClient: Redis;
 
   constructor(
     private readonly apiKeyValidationService: ApiKeyValidationService,
     private readonly presenceService: PresenceService,
-  ) {}
+  ) {
+    this.revocationSubscriptionClient = redisClient.duplicate();
+  }
 
   async afterInit(): Promise<void> {
     this.presenceService.setEventPublisher((event) => {
       this.publishEvent(event);
     });
     await this.presenceService.startExpiryListener();
+    await this.revocationSubscriptionClient.subscribe(REVOCATION_EVENT_CHANNEL);
+    this.revocationSubscriptionClient.on('message', (channel, payload) => {
+      if (channel !== REVOCATION_EVENT_CHANNEL) {
+        return;
+      }
+      void this.handleRevocationMessage(payload);
+    });
   }
 
   async handleConnection(client: Socket): Promise<void> {
+    const connectionIp = this.readClientIp(client);
+    const isRateLimited = await this.isHandshakeRateLimited(connectionIp);
+    if (isRateLimited) {
+      client.emit(ERROR_EVENT, {
+        code: TOO_MANY_REQUESTS_CODE,
+        message: 'Too many connection attempts. Please retry later.',
+      });
+      client.disconnect(true);
+      return;
+    }
+
     const authPayload = client.handshake.auth as ConnectionAuthPayload;
     const apiKey = this.readText(authPayload.apiKey);
     const userId = this.readText(authPayload.userId);
@@ -132,6 +160,51 @@ export class PresenceGateway
 
   private getTenantRoom(tenantId: string): string {
     return `${ROOM_PREFIX}:${tenantId}`;
+  }
+
+  private async handleRevocationMessage(payload: string): Promise<void> {
+    const tenantId = this.readTenantIdFromRevocation(payload);
+    if (!tenantId) {
+      return;
+    }
+
+    const tenantRoom = this.getTenantRoom(tenantId);
+    const sockets = await this.server.in(tenantRoom).fetchSockets();
+    sockets.forEach((socket) => {
+      socket.emit(ERROR_EVENT, {
+        message: 'API key was revoked. Connection will close.',
+      });
+      socket.disconnect(true);
+    });
+  }
+
+  private readTenantIdFromRevocation(payload: string): string | null {
+    try {
+      const parsedPayload = JSON.parse(payload) as {
+        tenantId?: unknown;
+      };
+      return this.readText(parsedPayload.tenantId) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async isHandshakeRateLimited(clientIp: string): Promise<boolean> {
+    const rateLimitKey = `${HANDSHAKE_RATE_LIMIT_KEY_PREFIX}:${clientIp}`;
+    const attemptCount = await redisClient.incr(rateLimitKey);
+    if (attemptCount === 1) {
+      await redisClient.expire(rateLimitKey, HANDSHAKE_WINDOW_SECONDS);
+    }
+    return attemptCount > HANDSHAKE_MAX_ATTEMPTS;
+  }
+
+  private readClientIp(client: Socket): string {
+    const forwardedHeader = client.handshake.headers['x-forwarded-for'];
+    if (typeof forwardedHeader === 'string' && forwardedHeader.trim()) {
+      return forwardedHeader.split(',')[0]?.trim() ?? 'unknown';
+    }
+
+    return this.readText(client.handshake.address) || 'unknown';
   }
 
   private readText(value: unknown): string {

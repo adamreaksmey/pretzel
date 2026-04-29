@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { redisClient } from '@pretzel/redis';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   createApiKeySecret,
@@ -68,5 +69,21 @@ export class AuthService {
       },
     );
     return validatedApiKey?.tenantId ?? null;
+  }
+
+  async revokeApiKey(tenantId: string): Promise<{ tenantId: string }> {
+    const deleteResult = await this.apiKeyRepository.delete({ tenantId });
+    if (!deleteResult.affected) {
+      throw new NotFoundException('API key not found for tenant.');
+    }
+
+    await redisClient.publish(
+      'auth.revoked',
+      JSON.stringify({
+        tenantId,
+        revokedAt: new Date().toISOString(),
+      }),
+    );
+    return { tenantId };
   }
 }
