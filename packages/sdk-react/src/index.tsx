@@ -20,6 +20,8 @@ const TYPING_STOP_EVENT = "typing_stop";
 
 const PresenceClientContext = createContext<PresenceClient | null>(null);
 type PresenceState = { status: PresenceStatus; last_seen: string | null };
+type OrderedPresenceState = PresenceState & { lastUpdatedMs: number };
+type TypingState = { isTyping: boolean; lastUpdatedMs: number };
 
 interface PresenceProviderProps {
   client: PresenceClient;
@@ -44,23 +46,27 @@ export function usePresenceClient(): PresenceClient {
 
 export function usePresence(userId: string): PresenceState {
   const client = usePresenceClient();
-  const [presence, setPresence] = useState<UserPresence>({
-    userId,
+  const [presence, setPresence] = useState<OrderedPresenceState>({
     status: OFFLINE_STATUS,
     last_seen: null,
+    lastUpdatedMs: 0,
   });
 
   useEffect(() => {
     let isCancelled = false;
     void client.getPresence(userId).then((nextPresence) => {
       if (!isCancelled) {
-        setPresence(nextPresence);
+        setPresence({
+          status: nextPresence.status,
+          last_seen: nextPresence.last_seen,
+          lastUpdatedMs: readOptionalTimestampMs(nextPresence.last_seen),
+        });
       }
     });
 
     const unsubscribe = client.subscribeToUser(userId, (presenceEvent) => {
       setPresence((currentPresence) =>
-        updatePresenceState(currentPresence, presenceEvent),
+        updateOrderedPresenceState(currentPresence, presenceEvent),
       );
     });
 
@@ -124,26 +130,25 @@ export function usePresenceBatch(
 
 export function useTyping(userId: string): { isTyping: boolean } {
   const client = usePresenceClient();
-  const [isTyping, setIsTyping] = useState(false);
+  const [typingState, setTypingState] = useState<TypingState>({
+    isTyping: false,
+    lastUpdatedMs: 0,
+  });
 
   useEffect(() => {
     const unsubscribe = client.subscribeToUser(userId, (presenceEvent) => {
-      if (presenceEvent.type === TYPING_START_EVENT) {
-        setIsTyping(true);
-        return;
-      }
-      if (presenceEvent.type === TYPING_STOP_EVENT) {
-        setIsTyping(false);
-      }
+      setTypingState((currentTypingState) =>
+        updateTypingState(currentTypingState, presenceEvent),
+      );
     });
 
     return () => {
       unsubscribe();
-      setIsTyping(false);
+      setTypingState({ isTyping: false, lastUpdatedMs: 0 });
     };
   }, [client, userId]);
 
-  return useMemo(() => ({ isTyping }), [isTyping]);
+  return useMemo(() => ({ isTyping: typingState.isTyping }), [typingState.isTyping]);
 }
 
 function createPresenceRecord(
@@ -191,6 +196,67 @@ function updatePresenceState(
   }
 
   return currentPresence;
+}
+
+function updateOrderedPresenceState(
+  currentPresence: OrderedPresenceState,
+  presenceEvent: PresenceEvent,
+): OrderedPresenceState {
+  if (presenceEvent.type !== USER_ONLINE_EVENT && presenceEvent.type !== USER_OFFLINE_EVENT) {
+    return currentPresence;
+  }
+
+  const eventTimestampMs = readOptionalTimestampMs(presenceEvent.timestamp);
+  if (eventTimestampMs < currentPresence.lastUpdatedMs) {
+    return currentPresence;
+  }
+
+  if (presenceEvent.type === USER_ONLINE_EVENT) {
+    return {
+      ...currentPresence,
+      status: ONLINE_STATUS,
+      lastUpdatedMs: eventTimestampMs,
+    };
+  }
+
+  return {
+    ...currentPresence,
+    status: OFFLINE_STATUS,
+    last_seen: presenceEvent.timestamp ?? currentPresence.last_seen,
+    lastUpdatedMs: eventTimestampMs,
+  };
+}
+
+function updateTypingState(
+  currentTypingState: TypingState,
+  presenceEvent: PresenceEvent,
+): TypingState {
+  if (presenceEvent.type !== TYPING_START_EVENT && presenceEvent.type !== TYPING_STOP_EVENT) {
+    return currentTypingState;
+  }
+
+  const eventTimestampMs = readOptionalTimestampMs(presenceEvent.timestamp);
+  if (eventTimestampMs < currentTypingState.lastUpdatedMs) {
+    return currentTypingState;
+  }
+
+  return {
+    isTyping: presenceEvent.type === TYPING_START_EVENT,
+    lastUpdatedMs: eventTimestampMs,
+  };
+}
+
+function readOptionalTimestampMs(value: unknown): number {
+  if (typeof value !== "string" || !value.trim()) {
+    return 0;
+  }
+
+  const parsedMilliseconds = Date.parse(value);
+  if (!Number.isFinite(parsedMilliseconds)) {
+    return 0;
+  }
+
+  return parsedMilliseconds;
 }
 
 function createPresenceStateRecord(

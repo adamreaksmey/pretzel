@@ -1,12 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { lastSeenKey, redisClient, userSessionsKey } from '@pretzel/redis';
+import {
+  lastSeenKey,
+  redisClient,
+  sessionKey,
+  userSessionsKey,
+} from '@pretzel/redis';
 import type { UserPresence } from '@pretzel/types';
 
 interface PresenceReadRedisClient {
   scard(key: string): Promise<number>;
+  smembers(key: string): Promise<string[]>;
   get(key: string): Promise<string | null>;
   pipeline(): {
     scard(key: string): unknown;
+    exists(key: string): unknown;
     get(key: string): unknown;
     exec(): Promise<Array<[Error | null, unknown]>>;
   };
@@ -19,18 +26,30 @@ export class PresenceService {
   private readonly logger = new Logger(PresenceService.name);
 
   async getPresence(tenantId: string, userId: string): Promise<UserPresence> {
+    const userSessionSetStorageKey = userSessionsKey(tenantId, userId);
     const [sessionCount, lastSeen] = await this.withRedisTimeout(
       'read single-user presence',
       () =>
         Promise.all([
-          typedRedisClient.scard(userSessionsKey(tenantId, userId)),
+          typedRedisClient.scard(userSessionSetStorageKey),
           typedRedisClient.get(lastSeenKey(tenantId, userId)),
         ]),
+    );
+    if (sessionCount === 0) {
+      return {
+        userId,
+        status: 'offline',
+        last_seen: lastSeen,
+      };
+    }
+
+    const hasActiveSession = await this.hasAnyActiveSession(
+      userSessionSetStorageKey,
     );
 
     return {
       userId,
-      status: sessionCount > 0 ? 'online' : 'offline',
+      status: hasActiveSession ? 'online' : 'offline',
       last_seen: lastSeen,
     };
   }
@@ -87,6 +106,28 @@ export class PresenceService {
       return reply[1];
     }
     return null;
+  }
+
+  private async hasAnyActiveSession(
+    userSessionSetStorageKey: string,
+  ): Promise<boolean> {
+    const sessionIds = await this.withRedisTimeout(
+      'read single-user session ids',
+      () => typedRedisClient.smembers(userSessionSetStorageKey),
+    );
+    if (sessionIds.length === 0) {
+      return false;
+    }
+
+    const existencePipeline = typedRedisClient.pipeline();
+    sessionIds.forEach((sessionId) => {
+      existencePipeline.exists(sessionKey(sessionId));
+    });
+    const existenceReplies = await this.withRedisTimeout(
+      'read single-user active session existence',
+      () => existencePipeline.exec(),
+    );
+    return existenceReplies.some((reply) => this.readPipelineNumber(reply) > 0);
   }
 
   private async withRedisTimeout<T>(

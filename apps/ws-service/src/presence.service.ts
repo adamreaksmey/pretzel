@@ -120,6 +120,7 @@ export class PresenceService implements OnModuleDestroy {
     this.subscriptionClient.on('message', (_channel, expiredKey) => {
       void this.processExpiredKey(expiredKey);
     });
+    await this.reconcileSessions();
     this.startReconciliationSweeper();
   }
 
@@ -144,7 +145,7 @@ export class PresenceService implements OnModuleDestroy {
     const { sessionId, activeSessionCount } =
       await this.registerConnectionWithCollisionRetry(tenantId, userId);
     this.sessionIdentityBySessionId.set(sessionId, { tenantId, userId });
-    this.publishTransitionEvent(
+    await this.publishTransitionEvent(
       activeSessionCount === 1,
       'user_online',
       tenantId,
@@ -197,7 +198,7 @@ export class PresenceService implements OnModuleDestroy {
         ),
     );
     this.sessionIdentityBySessionId.delete(sessionId);
-    this.publishTransitionEvent(
+    await this.publishTransitionEvent(
       this.readNumericScriptResult(cleanupScriptResult) === 1,
       'user_offline',
       identity.tenantId,
@@ -214,7 +215,7 @@ export class PresenceService implements OnModuleDestroy {
         redisClient.set(typingStorageKey, '1', 'EX', typingTtlSeconds, 'NX'),
     );
     if (initialTypingSetResult === 'OK') {
-      this.publishEvent('typing_start', tenantId, userId);
+      await this.publishEvent('typing_start', tenantId, userId);
       return;
     }
 
@@ -233,7 +234,7 @@ export class PresenceService implements OnModuleDestroy {
       return;
     }
 
-    this.publishEvent('typing_stop', tenantId, userId);
+    await this.publishEvent('typing_stop', tenantId, userId);
   }
 
   private async processExpiredKey(expiredKey: string): Promise<void> {
@@ -252,7 +253,7 @@ export class PresenceService implements OnModuleDestroy {
       return;
     }
 
-    this.publishEvent(
+    await this.publishEvent(
       'typing_stop',
       typingIdentity.tenantId,
       typingIdentity.userId,
@@ -340,6 +341,57 @@ export class PresenceService implements OnModuleDestroy {
     staleSessionIds.forEach((staleSessionId) => {
       this.sessionIdentityBySessionId.delete(staleSessionId);
     });
+  }
+
+  private async pruneOrphanedSessionHashes(): Promise<void> {
+    let scanCursor = '0';
+    do {
+      const scanResult = await this.withRedisTimeout('scan session keys', () =>
+        redisClient.scan(
+          scanCursor,
+          'MATCH',
+          `${SESSION_KEY_PREFIX}*`,
+          'COUNT',
+          '100',
+        ),
+      );
+      scanCursor = scanResult[0] ?? '0';
+      const sessionKeys = scanResult[1] ?? [];
+      for (const sessionStorageKey of sessionKeys) {
+        await this.pruneSingleOrphanedSessionHash(sessionStorageKey);
+      }
+    } while (scanCursor !== '0');
+  }
+
+  private async pruneSingleOrphanedSessionHash(
+    sessionStorageKey: string,
+  ): Promise<void> {
+    const sessionId = sessionStorageKey.slice(SESSION_KEY_PREFIX.length);
+    if (!sessionId) {
+      return;
+    }
+
+    const sessionIdentity = await this.resolveSessionIdentity(sessionId);
+    if (!sessionIdentity) {
+      return;
+    }
+
+    const memberCheckResult = await this.withRedisTimeout(
+      'check user session membership',
+      () =>
+        redisClient.sismember(
+          userSessionsKey(sessionIdentity.tenantId, sessionIdentity.userId),
+          sessionId,
+        ),
+    );
+    if (memberCheckResult === 1) {
+      return;
+    }
+
+    await this.withRedisTimeout('delete orphaned session hash', () =>
+      redisClient.del(sessionStorageKey),
+    );
+    this.sessionIdentityBySessionId.delete(sessionId);
   }
 
   private async tryRegisterSession(
@@ -468,30 +520,31 @@ export class PresenceService implements OnModuleDestroy {
     return { tenantId, userId };
   }
 
-  private publishTransitionEvent(
+  private async publishTransitionEvent(
     shouldPublish: boolean,
     eventType: PresenceEventType,
     tenantId: string,
     userId: string,
-  ): void {
+  ): Promise<void> {
     if (!shouldPublish) {
       return;
     }
 
-    this.publishEvent(eventType, tenantId, userId);
+    await this.publishEvent(eventType, tenantId, userId);
   }
 
-  private publishEvent(
+  private async publishEvent(
     eventType: PresenceEventType,
     tenantId: string,
     userId: string,
-  ): void {
+  ): Promise<void> {
+    const nowIso = await this.readRedisNowIso();
     this.emitEvent({
       type: eventType,
       tenantId,
       userId,
       targetUserId: userId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso,
     });
   }
 
@@ -526,6 +579,7 @@ export class PresenceService implements OnModuleDestroy {
           await this.reconcileSingleUserSessionSet(userSessionKey);
         }
       } while (scanCursor !== '0');
+      await this.pruneOrphanedSessionHashes();
     } catch (error) {
       this.logger.error(
         'Presence reconciliation sweep failed.',
@@ -596,7 +650,7 @@ export class PresenceService implements OnModuleDestroy {
         lastSeenIso,
       ),
     );
-    this.publishEvent('user_offline', identity.tenantId, identity.userId);
+    await this.publishEvent('user_offline', identity.tenantId, identity.userId);
   }
 
   private parseIdentityFromUserSessionKey(

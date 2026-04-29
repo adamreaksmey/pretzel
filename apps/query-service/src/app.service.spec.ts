@@ -2,7 +2,9 @@ jest.mock('@pretzel/redis', () => {
   return {
     redisClient: {
       scard: jest.fn(),
+      smembers: jest.fn(),
       get: jest.fn(),
+      pipeline: jest.fn(),
     },
     userSessionsKey: (tenantId: string, userId: string) =>
       `user_sessions:${tenantId}:${userId}`,
@@ -11,20 +13,28 @@ jest.mock('@pretzel/redis', () => {
   };
 });
 
-import { AppService } from './app.service';
+import { PresenceService } from './app.service';
 import { redisClient } from '@pretzel/redis';
 
 type RedisReadClient = {
   scard: jest.Mock<Promise<number>, [string]>;
+  smembers: jest.Mock<Promise<string[]>, [string]>;
   get: jest.Mock<Promise<string | null>, [string]>;
+  pipeline: jest.Mock<
+    {
+      exists: jest.Mock<unknown, [string]>;
+      exec: jest.Mock<Promise<Array<[Error | null, unknown]>>, []>;
+    },
+    []
+  >;
 };
 
 describe('AppService reliability', () => {
   const redisReadClient = redisClient as unknown as RedisReadClient;
-  let appService: AppService;
+  let appService: PresenceService;
 
   beforeEach(() => {
-    appService = new AppService();
+    appService = new PresenceService();
     jest.clearAllMocks();
   });
 
@@ -46,6 +56,28 @@ describe('AppService reliability', () => {
         return Promise.resolve('2026-01-01T00:00:00.000Z');
       }
       return Promise.resolve(null);
+    });
+    redisReadClient.smembers.mockImplementation((key: string) => {
+      if (key === 'user_sessions:tenant-a:shared-user') {
+        return Promise.resolve(['session-a']);
+      }
+      if (key === 'user_sessions:tenant-b:shared-user') {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve([]);
+    });
+    redisReadClient.pipeline.mockImplementation(() => {
+      const existsCalls: string[] = [];
+      const exists = jest.fn<unknown, [string]>((key: string) => {
+        existsCalls.push(key);
+        return undefined;
+      });
+      const exec = jest.fn<Promise<Array<[Error | null, unknown]>>, []>(() =>
+        Promise.resolve(
+          existsCalls.map((key) => [null, key === 'session:session-a' ? 1 : 0]),
+        ),
+      );
+      return { exists, exec };
     });
 
     const tenantAPresence = await appService.getPresence(
