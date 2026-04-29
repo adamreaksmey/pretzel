@@ -37,7 +37,7 @@ services:
       CHOKIDAR_INTERVAL: "1000"
     ports:
       - "3000:3000"
-    command: sh -lc "npm ci && npm run start:dev --workspace=query-service"
+    command: npm run start:dev --workspace=query-service
     volumes:
       - .:/app
       - query-service-node-modules:/app/node_modules
@@ -61,7 +61,7 @@ services:
       CHOKIDAR_INTERVAL: "1000"
     ports:
       - "3001:3001"
-    command: sh -lc "npm ci && npm run start:dev --workspace=@pretzel/ws-service"
+    command: npm run start:dev --workspace=@pretzel/ws-service
     volumes:
       - .:/app
       - ws-service-node-modules:/app/node_modules
