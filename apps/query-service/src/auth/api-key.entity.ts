@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { TenantEntity } from '../tenant/tenant.entity';
 @Entity({ name: 'api_keys' })
-@Index('IDX_api_keys_tenant_id', ['tenantId'])
+@Index('UQ_api_keys_tenant_id', ['tenantId'], { unique: true })
 @Index('IDX_api_key', ['key'])
 export class ApiKeyEntity {
   @PrimaryGeneratedColumn('uuid')

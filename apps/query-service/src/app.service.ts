@@ -17,6 +17,8 @@ export class PresenceService {
       typedRedisClient.get(lastSeenKey(tenantId, userId)),
     ]);
 
+    console.log('show sessioncount, last seen', [sessionCount, lastSeen]);
+
     return {
       userId,
       status: sessionCount > 0 ? 'online' : 'offline',

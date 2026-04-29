@@ -33,8 +33,14 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/pretzel}
       PORT: ${PORT:-3000}
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "1000"
     ports:
       - "3000:3000"
+    command: npm run start:dev --workspace=query-service
+    volumes:
+      - .:/app
+      - query-service-node-modules:/app/node_modules
 
   ws-service:
     build:
@@ -51,8 +57,16 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/pretzel}
       WS_SERVICE_PORT: ${WS_SERVICE_PORT:-3001}
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "1000"
     ports:
       - "3001:3001"
+    command: npm run start:dev --workspace=@pretzel/ws-service
+    volumes:
+      - .:/app
+      - ws-service-node-modules:/app/node_modules
 
 volumes:
   pretzel-postgres-data:
+  query-service-node-modules:
+  ws-service-node-modules:

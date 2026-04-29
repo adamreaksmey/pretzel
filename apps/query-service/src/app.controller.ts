@@ -13,6 +13,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiProperty,
   ApiTags,
 } from '@nestjs/swagger';
 import type { UserPresence } from '@pretzel/types';
@@ -20,12 +21,26 @@ import type { AuthenticatedRequest } from './auth/authenticated-request';
 import { PresenceService } from './app.service';
 
 class PresenceBatchBodyDto {
+  @ApiProperty({
+    type: [String],
+    example: ['user-123', 'user-456'],
+    description: 'List of user IDs to query presence for.',
+  })
   userIds!: string[];
 }
 
 class UserPresenceDto {
+  @ApiProperty({ example: 'user-123' })
   userId!: string;
+
+  @ApiProperty({ enum: ['online', 'offline'], example: 'online' })
   status!: 'online' | 'offline';
+
+  @ApiProperty({
+    nullable: true,
+    example: '2026-04-29T03:40:00.000Z',
+    description: 'ISO timestamp when the user was last seen, null if online.',
+  })
   last_seen!: string | null;
 }
 

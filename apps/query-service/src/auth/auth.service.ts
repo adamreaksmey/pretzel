@@ -25,16 +25,26 @@ export class AuthService {
     const tenant = await this.tenantRepository.findOne({
       where: { id: tenantId },
     });
+
     if (!tenant) {
       throw new NotFoundException('Tenant not found.');
     }
 
-    const apiKeyEntity = await this.apiKeyRepository.save(
-      this.apiKeyRepository.create({ tenantId, key: 'pending' }),
-    );
     const apiKeySecret = createApiKeySecret();
-    apiKeyEntity.key = await hashApiKeySecret(apiKeySecret);
-    await this.apiKeyRepository.save(apiKeyEntity);
+    const hashed = await hashApiKeySecret(apiKeySecret);
+
+    await this.apiKeyRepository.upsert(
+      {
+        tenantId,
+        key: hashed,
+      },
+      ['tenantId'], // conflict target
+    );
+
+    const apiKeyEntity = await this.apiKeyRepository.findOneOrFail({
+      where: { tenantId },
+    });
+
     return {
       apiKey: createPresentedApiKey(apiKeyEntity.id, apiKeySecret),
       tenantId,
