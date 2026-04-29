@@ -141,6 +141,9 @@ export class PresenceService implements OnModuleDestroy {
     tenantId: string,
     userId: string,
   ): Promise<ConnectionContext> {
+    // Multiple sessions may overlap briefly during reconnect. Session count may
+    // be temporarily inflated. This is accepted behavior; presence remains
+    // correct while any session exists.
     await this.pruneStaleSessions(tenantId, userId);
     const { sessionId, activeSessionCount } =
       await this.registerConnectionWithCollisionRetry(tenantId, userId);
@@ -560,6 +563,9 @@ export class PresenceService implements OnModuleDestroy {
 
   private async reconcileSessions(): Promise<void> {
     try {
+      // On restart, Redis session keys persist until TTL expiry (max 30s).
+      // Users may appear online briefly with no active socket. Reconciliation
+      // corrects this drift on each sweep interval.
       let scanCursor = '0';
       do {
         const scanResult = await this.withRedisTimeout(

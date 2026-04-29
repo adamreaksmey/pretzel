@@ -8,6 +8,7 @@ jest.mock('@pretzel/redis', () => {
     },
     userSessionsKey: (tenantId: string, userId: string) =>
       `user_sessions:${tenantId}:${userId}`,
+    sessionKey: (sessionId: string) => `session:${sessionId}`,
     lastSeenKey: (tenantId: string, userId: string) =>
       `last_seen:${tenantId}:${userId}`,
   };

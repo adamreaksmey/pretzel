@@ -35,6 +35,9 @@ export class PresenceService {
           typedRedisClient.get(lastSeenKey(tenantId, userId)),
         ]),
     );
+    // SCARD may include stale session_ids in edge cases. Read-time validation
+    // below corrects false positives. Full consistency is guaranteed by
+    // ws-service cleanup paths.
     if (sessionCount === 0) {
       return {
         userId,

@@ -57,10 +57,16 @@ export class PresenceClient {
     this.shouldReconnect = false;
     this.stopHeartbeat();
     this.clearReconnectTimeout();
+    this.detachSocketListeners(this.socket);
     this.socket?.disconnect();
     this.socket = null;
   }
 
+  /**
+   * Each call creates an independent subscription. The returned unsubscribe
+   * function removes only that specific handler. Callers are responsible for
+   * unsubscribing to avoid leaks.
+   */
   subscribeToUser(
     userId: string,
     callback: PresenceSubscription,
@@ -104,6 +110,7 @@ export class PresenceClient {
 
   private connectSocket(): void {
     const options = this.requireActiveOptions();
+    this.detachSocketListeners(this.socket);
     this.socket?.disconnect();
     this.socket = io(options.url, {
       autoConnect: true,
@@ -190,6 +197,10 @@ export class PresenceClient {
 
     clearTimeout(this.reconnectTimeoutId);
     this.reconnectTimeoutId = null;
+  }
+
+  private detachSocketListeners(socket: Socket | null): void {
+    socket?.off();
   }
 
   private dispatchPresenceEvent(presenceEvent: EventWithTargetUser): void {
