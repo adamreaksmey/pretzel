@@ -19,8 +19,6 @@ import {
   SOCKET_EVENT_PING,
   SOCKET_EVENT_START_TYPING,
   SOCKET_EVENT_STOP_TYPING,
-  TENANT_API_KEY_PREFIX,
-  TENANT_ID_HEADER,
 } from "./constants.js";
 
 export interface ConnectOptions {
@@ -286,24 +284,12 @@ export class PresenceClient {
       headers: {
         "content-type": "application/json",
         [API_KEY_HEADER]: options.apiKey,
-        [TENANT_ID_HEADER]: this.resolveTenantId(options.apiKey),
       },
     });
     if (!response.ok) {
       throw new Error(`Presence request failed with status ${response.status}.`);
     }
     return (await response.json()) as TResponse;
-  }
-
-  private resolveTenantId(apiKey: string): string {
-    if (!apiKey.startsWith(TENANT_API_KEY_PREFIX)) {
-      throw new Error("apiKey must use tenant:<tenantId> format.");
-    }
-    const tenantId = apiKey.slice(TENANT_API_KEY_PREFIX.length).trim();
-    if (tenantId) {
-      return tenantId;
-    }
-    throw new Error("apiKey is missing tenant identifier.");
   }
 
   private getHttpBaseUrl(socketUrl: string): string {

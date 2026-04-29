@@ -83,13 +83,13 @@ const client = new PresenceClient();
 ```ts
 client.connect({
   url: "ws://localhost:3001",
-  apiKey: "tenant:acme",
+  apiKey: "<keyId>.<secret>",
   userId: "user-123",
 });
 ```
 
 - `url`: WebSocket base URL
-- `apiKey`: required `tenant:<tenantId>` format
+- `apiKey`: issued presented API key in `<keyId>.<secret>` format
 - `userId`: current connected user
 
 ### `disconnect()`
@@ -150,7 +150,7 @@ const client = new PresenceClient();
 
 client.connect({
   url: "ws://localhost:3001",
-  apiKey: "tenant:acme",
+  apiKey: "<keyId>.<secret>",
   userId: "user-123",
 });
 
@@ -215,7 +215,7 @@ const client = new PresenceClient();
 
 client.connect({
   url: "ws://localhost:3001",
-  apiKey: "tenant:acme",
+  apiKey: "<keyId>.<secret>",
   userId: "viewer-user",
 });
 
@@ -253,7 +253,7 @@ export function App() {
 ## Error and Input Notes
 
 - `connect()` must be called before HTTP presence reads
-- `apiKey` must be `tenant:<tenantId>`
+- `apiKey` must be `<keyId>.<secret>`
 - `userId` must be a non-empty string
 - `getPresenceBatch(userIds)` requires at least one user ID
 - Non-2xx presence HTTP responses throw an error

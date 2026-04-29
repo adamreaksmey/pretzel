@@ -3,8 +3,6 @@ export const INITIAL_RECONNECT_DELAY_MS = 500;
 export const MAX_RECONNECT_DELAY_MS = 10_000;
 
 export const API_KEY_HEADER = "x-api-key";
-export const TENANT_ID_HEADER = "x-tenant-id";
-export const TENANT_API_KEY_PREFIX = "tenant:";
 
 export const SOCKET_EVENT_CONNECT = "connect";
 export const SOCKET_EVENT_DISCONNECT = "disconnect";

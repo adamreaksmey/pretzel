@@ -47,7 +47,7 @@ libs/
 - `POST /presence/batch`
 - Tenant scope via either:
   - `x-tenant-id` header
-  - `x-api-key` header in format `tenant:<tenantId>`
+  - `x-api-key` header in issued format `<keyId>.<secret>`
 
 ### WS Service (`apps/ws-service`)
 
