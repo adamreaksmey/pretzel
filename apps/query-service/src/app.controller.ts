@@ -98,12 +98,6 @@ export class AppController {
       throw new BadRequestException('Request body must include userIds array.');
     }
 
-    if (requestBody.userIds.length === 0) {
-      throw new BadRequestException(
-        'userIds must include at least one user id.',
-      );
-    }
-
     return requestBody.userIds.map((userId) =>
       this.normalizeRequiredValue(userId, 'userIds'),
     );

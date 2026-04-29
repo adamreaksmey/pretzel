@@ -121,6 +121,7 @@ export class PresenceService {
     tenantId: string,
     userId: string,
   ): Promise<ConnectionContext> {
+    await this.pruneStaleSessions(tenantId, userId);
     const { sessionId, activeSessionCount } =
       await this.registerConnectionWithCollisionRetry(tenantId, userId);
     this.sessionIdentityBySessionId.set(sessionId, { tenantId, userId });
@@ -135,7 +136,7 @@ export class PresenceService {
 
   async refreshSessionHeartbeat(sessionId: string): Promise<boolean> {
     const sessionStorageKey = sessionKey(sessionId);
-    const updatedExpiresAt = this.createSessionExpiryTimestamp();
+    const updatedExpiresAt = await this.createSessionExpiryTimestamp();
     const scriptResult = await redisClient.eval(
       REFRESH_HEARTBEAT_SCRIPT,
       1,
@@ -158,7 +159,7 @@ export class PresenceService {
       identity.tenantId,
       identity.userId,
     );
-    const nowIso = new Date().toISOString();
+    const nowIso = await this.readRedisNowIso();
     const cleanupScriptResult = await redisClient.eval(
       CLEANUP_SESSION_SCRIPT,
       3,
@@ -228,9 +229,12 @@ export class PresenceService {
     );
   }
 
-  private createSessionExpiryTimestamp(): string {
+  private async createSessionExpiryTimestamp(): Promise<string> {
+    const nowIso = await this.readRedisNowIso();
     const sessionTtlMilliseconds = SESSION_TTL_SECONDS * 1000;
-    return new Date(Date.now() + sessionTtlMilliseconds).toISOString();
+    return new Date(
+      new Date(nowIso).getTime() + sessionTtlMilliseconds,
+    ).toISOString();
   }
 
   private async registerConnectionWithCollisionRetry(
@@ -263,6 +267,43 @@ export class PresenceService {
     throw new Error('Unable to allocate a unique session id.');
   }
 
+  private async pruneStaleSessions(
+    tenantId: string,
+    userId: string,
+  ): Promise<void> {
+    const userSessionSetKey = userSessionsKey(tenantId, userId);
+    const sessionIds = await redisClient.smembers(userSessionSetKey);
+    if (sessionIds.length === 0) {
+      return;
+    }
+
+    const existenceChecks = redisClient.pipeline();
+    sessionIds.forEach((sessionId) => {
+      existenceChecks.exists(sessionKey(sessionId));
+    });
+    const existenceResults = await existenceChecks.exec();
+    if (!existenceResults) {
+      return;
+    }
+
+    const staleSessionIds = sessionIds.filter((sessionId, index) => {
+      const resultEntry = existenceResults[index];
+      if (!resultEntry) {
+        return false;
+      }
+      const [, existsResult] = resultEntry;
+      return Number(existsResult) === 0;
+    });
+    if (staleSessionIds.length === 0) {
+      return;
+    }
+
+    await redisClient.srem(userSessionSetKey, ...staleSessionIds);
+    staleSessionIds.forEach((staleSessionId) => {
+      this.sessionIdentityBySessionId.delete(staleSessionId);
+    });
+  }
+
   private async tryRegisterSession(
     sessionId: string,
     tenantId: string,
@@ -270,7 +311,7 @@ export class PresenceService {
   ): Promise<{ created: boolean; activeSessionCount: number }> {
     const sessionStorageKey = sessionKey(sessionId);
     const userSessionSetKey = userSessionsKey(tenantId, userId);
-    const expiresAtIso = this.createSessionExpiryTimestamp();
+    const expiresAtIso = await this.createSessionExpiryTimestamp();
     const scriptResult = await redisClient.eval(
       REGISTER_SESSION_SCRIPT,
       2,
@@ -287,6 +328,14 @@ export class PresenceService {
       created: parsedResult.created === 1,
       activeSessionCount: parsedResult.activeSessionCount,
     };
+  }
+
+  private async readRedisNowIso(): Promise<string> {
+    const redisTime = await redisClient.time();
+    const seconds = Number(redisTime[0] ?? 0);
+    const microseconds = Number(redisTime[1] ?? 0);
+    const milliseconds = seconds * 1000 + Math.floor(microseconds / 1000);
+    return new Date(milliseconds).toISOString();
   }
 
   private readIntegerResult(reply: unknown, index: number): number {
