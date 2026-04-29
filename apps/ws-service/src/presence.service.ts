@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   assertKeyspaceNotificationsEnabled,
   lastSeenKey,
@@ -28,9 +28,72 @@ type EventPublisher = (event: TenantPresenceEvent) => void;
 
 const SESSION_KEY_PREFIX = 'session:';
 const TYPING_KEY_PREFIX = 'typing:';
+const SESSION_COLLISION_RETRY_LIMIT = 1;
+const REGISTER_SESSION_SCRIPT = `
+  local sessionKey = KEYS[1]
+  local userSessionSetKey = KEYS[2]
+  local sessionId = ARGV[1]
+  local userId = ARGV[2]
+  local tenantId = ARGV[3]
+  local expiresAtIso = ARGV[4]
+  local sessionTtlSeconds = tonumber(ARGV[5])
+
+  local reserved = redis.call('SET', sessionKey, '__reserved__', 'NX', 'EX', sessionTtlSeconds)
+  if not reserved then
+    return {0, 0}
+  end
+
+  redis.call('DEL', sessionKey)
+  redis.call(
+    'HSET',
+    sessionKey,
+    'user_id',
+    userId,
+    'tenant_id',
+    tenantId,
+    'expires_at',
+    expiresAtIso
+  )
+  redis.call('EXPIRE', sessionKey, sessionTtlSeconds)
+  redis.call('SADD', userSessionSetKey, sessionId)
+  local activeSessionCount = redis.call('SCARD', userSessionSetKey)
+  return {1, activeSessionCount}
+`;
+const REFRESH_HEARTBEAT_SCRIPT = `
+  local sessionKey = KEYS[1]
+  local expiresAtFieldName = ARGV[1]
+  local expiresAtIso = ARGV[2]
+  local sessionTtlSeconds = tonumber(ARGV[3])
+
+  if redis.call('EXISTS', sessionKey) == 0 then
+    return 0
+  end
+
+  redis.call('HSET', sessionKey, expiresAtFieldName, expiresAtIso)
+  redis.call('EXPIRE', sessionKey, sessionTtlSeconds)
+  return 1
+`;
+const CLEANUP_SESSION_SCRIPT = `
+  local sessionKey = KEYS[1]
+  local userSessionSetKey = KEYS[2]
+  local lastSeenStorageKey = KEYS[3]
+  local sessionId = ARGV[1]
+  local lastSeenIso = ARGV[2]
+
+  redis.call('DEL', sessionKey)
+  local removedSessionCount = redis.call('SREM', userSessionSetKey, sessionId)
+  local activeSessionCount = redis.call('SCARD', userSessionSetKey)
+  redis.call('SET', lastSeenStorageKey, lastSeenIso)
+
+  if removedSessionCount == 1 and activeSessionCount == 0 then
+    return 1
+  end
+  return 0
+`;
 
 @Injectable()
 export class PresenceService {
+  private readonly logger = new Logger(PresenceService.name);
   private readonly sessionIdentityBySessionId = new Map<
     string,
     SessionIdentity
@@ -58,23 +121,8 @@ export class PresenceService {
     tenantId: string,
     userId: string,
   ): Promise<ConnectionContext> {
-    const sessionId = randomUUID();
-    const sessionStorageKey = sessionKey(sessionId);
-    const userSessionSetKey = userSessionsKey(tenantId, userId);
-    const expiresAtIso = this.createSessionExpiryTimestamp();
-    const transactionReply = await redisClient
-      .multi()
-      .hset(sessionStorageKey, {
-        [SESSION_HASH_USER_ID_FIELD]: userId,
-        [SESSION_HASH_TENANT_ID_FIELD]: tenantId,
-        [SESSION_HASH_EXPIRES_AT_FIELD]: expiresAtIso,
-      })
-      .expire(sessionStorageKey, SESSION_TTL_SECONDS)
-      .sadd(userSessionSetKey, sessionId)
-      .scard(userSessionSetKey)
-      .exec();
-
-    const activeSessionCount = this.readIntegerResult(transactionReply, 3);
+    const { sessionId, activeSessionCount } =
+      await this.registerConnectionWithCollisionRetry(tenantId, userId);
     this.sessionIdentityBySessionId.set(sessionId, { tenantId, userId });
     this.publishTransitionEvent(
       activeSessionCount === 1,
@@ -88,14 +136,15 @@ export class PresenceService {
   async refreshSessionHeartbeat(sessionId: string): Promise<boolean> {
     const sessionStorageKey = sessionKey(sessionId);
     const updatedExpiresAt = this.createSessionExpiryTimestamp();
-    const transactionReply = await redisClient
-      .multi()
-      .hset(sessionStorageKey, SESSION_HASH_EXPIRES_AT_FIELD, updatedExpiresAt)
-      .expire(sessionStorageKey, SESSION_TTL_SECONDS)
-      .exec();
-
-    const expireResult = this.readIntegerResult(transactionReply, 1);
-    return expireResult === 1;
+    const scriptResult = await redisClient.eval(
+      REFRESH_HEARTBEAT_SCRIPT,
+      1,
+      sessionStorageKey,
+      SESSION_HASH_EXPIRES_AT_FIELD,
+      updatedExpiresAt,
+      String(SESSION_TTL_SECONDS),
+    );
+    return this.readNumericScriptResult(scriptResult) === 1;
   }
 
   async cleanupSession(sessionId: string): Promise<void> {
@@ -110,18 +159,18 @@ export class PresenceService {
       identity.userId,
     );
     const nowIso = new Date().toISOString();
-    const transactionReply = await redisClient
-      .multi()
-      .del(sessionStorageKey)
-      .srem(userSessionSetKey, sessionId)
-      .scard(userSessionSetKey)
-      .set(lastSeenKey(identity.tenantId, identity.userId), nowIso)
-      .exec();
-
-    const activeSessionCount = this.readIntegerResult(transactionReply, 2);
+    const cleanupScriptResult = await redisClient.eval(
+      CLEANUP_SESSION_SCRIPT,
+      3,
+      sessionStorageKey,
+      userSessionSetKey,
+      lastSeenKey(identity.tenantId, identity.userId),
+      sessionId,
+      nowIso,
+    );
     this.sessionIdentityBySessionId.delete(sessionId);
     this.publishTransitionEvent(
-      activeSessionCount === 0,
+      this.readNumericScriptResult(cleanupScriptResult) === 1,
       'user_offline',
       identity.tenantId,
       identity.userId,
@@ -184,6 +233,62 @@ export class PresenceService {
     return new Date(Date.now() + sessionTtlMilliseconds).toISOString();
   }
 
+  private async registerConnectionWithCollisionRetry(
+    tenantId: string,
+    userId: string,
+  ): Promise<{ sessionId: string; activeSessionCount: number }> {
+    for (
+      let collisionRetryCount = 0;
+      collisionRetryCount <= SESSION_COLLISION_RETRY_LIMIT;
+      collisionRetryCount += 1
+    ) {
+      const sessionId = randomUUID();
+      const registerResult = await this.tryRegisterSession(
+        sessionId,
+        tenantId,
+        userId,
+      );
+      if (registerResult.created) {
+        return {
+          sessionId,
+          activeSessionCount: registerResult.activeSessionCount,
+        };
+      }
+
+      this.logger.warn(
+        `Detected session id collision for ${sessionId}; retrying registration.`,
+      );
+    }
+
+    throw new Error('Unable to allocate a unique session id.');
+  }
+
+  private async tryRegisterSession(
+    sessionId: string,
+    tenantId: string,
+    userId: string,
+  ): Promise<{ created: boolean; activeSessionCount: number }> {
+    const sessionStorageKey = sessionKey(sessionId);
+    const userSessionSetKey = userSessionsKey(tenantId, userId);
+    const expiresAtIso = this.createSessionExpiryTimestamp();
+    const scriptResult = await redisClient.eval(
+      REGISTER_SESSION_SCRIPT,
+      2,
+      sessionStorageKey,
+      userSessionSetKey,
+      sessionId,
+      userId,
+      tenantId,
+      expiresAtIso,
+      String(SESSION_TTL_SECONDS),
+    );
+    const parsedResult = this.readSessionRegistrationResult(scriptResult);
+    return {
+      created: parsedResult.created === 1,
+      activeSessionCount: parsedResult.activeSessionCount,
+    };
+  }
+
   private readIntegerResult(reply: unknown, index: number): number {
     if (!Array.isArray(reply)) {
       throw new Error('Redis transaction did not return a valid array.');
@@ -198,6 +303,34 @@ export class PresenceService {
     }
 
     return resultEntry[1];
+  }
+
+  private readSessionRegistrationResult(reply: unknown): {
+    created: number;
+    activeSessionCount: number;
+  } {
+    if (!Array.isArray(reply) || reply.length < 2) {
+      throw new Error(
+        'Redis registration script returned an invalid response.',
+      );
+    }
+
+    const created = Number(reply[0]);
+    const activeSessionCount = Number(reply[1]);
+    if (!Number.isInteger(created) || !Number.isInteger(activeSessionCount)) {
+      throw new Error(
+        'Redis registration script returned non-integer responses.',
+      );
+    }
+    return { created, activeSessionCount };
+  }
+
+  private readNumericScriptResult(reply: unknown): number {
+    const numericResult = Number(reply);
+    if (!Number.isInteger(numericResult)) {
+      throw new Error('Redis script returned a non-integer response.');
+    }
+    return numericResult;
   }
 
   private isIntegerReplyEntry(entry: unknown): entry is [unknown, number] {
