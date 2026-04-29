@@ -23,6 +23,7 @@ import {
 
 export interface ConnectOptions {
   url: string;
+  httpUrl?: string;
   apiKey: string;
   userId: string;
 }
@@ -305,6 +306,8 @@ export class PresenceClient {
   }
 
   private getHttpBaseUrl(socketUrl: string): string {
+    const options = this.requireActiveOptions();
+    if (options.httpUrl) return options.httpUrl;
     const normalizedUrl = new URL(socketUrl);
     const protocol = normalizedUrl.protocol === "wss:" ? "https:" : "http:";
     return `${protocol}//${normalizedUrl.host}`;
