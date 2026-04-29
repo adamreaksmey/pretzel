@@ -83,12 +83,14 @@ const client = new PresenceClient();
 ```ts
 client.connect({
   url: "ws://localhost:3001",
+  httpUrl: "http://localhost:3000",
   apiKey: "<keyId>.<secret>",
   userId: "user-123",
 });
 ```
 
 - `url`: WebSocket base URL
+- `httpUrl` (optional): HTTP base URL for presence reads; if omitted, derived from `url`
 - `apiKey`: issued presented API key in `<keyId>.<secret>` format
 - `userId`: current connected user
 
@@ -150,6 +152,7 @@ const client = new PresenceClient();
 
 client.connect({
   url: "ws://localhost:3001",
+  httpUrl: "http://localhost:3000",
   apiKey: "<keyId>.<secret>",
   userId: "user-123",
 });
@@ -215,6 +218,7 @@ const client = new PresenceClient();
 
 client.connect({
   url: "ws://localhost:3001",
+  httpUrl: "http://localhost:3000",
   apiKey: "<keyId>.<secret>",
   userId: "viewer-user",
 });
@@ -262,9 +266,10 @@ export function App() {
 ## Service Expectations
 
 - WS service should be reachable at your configured `url`
-- Query API is inferred from WS URL host:
+- Query API uses `httpUrl` when provided
+- If `httpUrl` is omitted, Query API is inferred from WS URL host:
   - `ws://host` -> `http://host`
   - `wss://host` -> `https://host`
-- Presence read requests (`getPresence`, `getPresenceBatch`) are sent to that inferred HTTP base URL
+- Presence read requests (`getPresence`, `getPresenceBatch`) are sent to that resolved HTTP base URL
 
 For platform setup and architecture details, see [`README.md`](./README.md).

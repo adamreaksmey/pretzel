@@ -12,7 +12,8 @@
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "publish:all": "npm publish -w @adamthedeveloper/pretzel-types --access public && npm publish -w @adamthedeveloper/pretzel-sdk --access public && npm publish -w @adamthedeveloper/pretzel-sdk-react --access public"
   },
   "devDependencies": {
     "turbo": "^2.5.0",
