@@ -1,5 +1,24 @@
 import type { PresenceEvent, UserPresence } from "@pretzel/types";
 import { io, type Socket } from "socket.io-client";
+import {
+  API_KEY_HEADER,
+  EVENT_TYPING_START,
+  EVENT_TYPING_STOP,
+  EVENT_USER_OFFLINE,
+  EVENT_USER_ONLINE,
+  HEARTBEAT_INTERVAL_MS,
+  INITIAL_RECONNECT_DELAY_MS,
+  MAX_RECONNECT_DELAY_MS,
+  PRESENCE_BATCH_PATH,
+  SOCKET_EVENT_CONNECT,
+  SOCKET_EVENT_CONNECT_ERROR,
+  SOCKET_EVENT_DISCONNECT,
+  SOCKET_EVENT_PING,
+  SOCKET_EVENT_START_TYPING,
+  SOCKET_EVENT_STOP_TYPING,
+  TENANT_API_KEY_PREFIX,
+  TENANT_ID_HEADER,
+} from "./constants.js";
 
 export interface ConnectOptions {
   url: string;
@@ -9,26 +28,11 @@ export interface ConnectOptions {
 
 export type PresenceSubscription = (presenceEvent: PresenceEvent) => void;
 
-const HEARTBEAT_INTERVAL_MS = 15_000;
-const INITIAL_RECONNECT_DELAY_MS = 500;
-const MAX_RECONNECT_DELAY_MS = 10_000;
-const PING_EVENT = "ping";
-const START_TYPING_EVENT = "startTyping";
-const STOP_TYPING_EVENT = "stopTyping";
-const PRESENCE_ONLINE_EVENT = "user_online";
-const PRESENCE_OFFLINE_EVENT = "user_offline";
-const TYPING_START_EVENT = "typing_start";
-const TYPING_STOP_EVENT = "typing_stop";
-const PRESENCE_BATCH_PATH = "/presence/batch";
-const TENANT_ID_HEADER = "x-tenant-id";
-const API_KEY_HEADER = "x-api-key";
-const TENANT_API_KEY_PREFIX = "tenant:";
-
 type PresenceEventType =
-  | typeof PRESENCE_ONLINE_EVENT
-  | typeof PRESENCE_OFFLINE_EVENT
-  | typeof TYPING_START_EVENT
-  | typeof TYPING_STOP_EVENT;
+  | typeof EVENT_USER_ONLINE
+  | typeof EVENT_USER_OFFLINE
+  | typeof EVENT_TYPING_START
+  | typeof EVENT_TYPING_STOP;
 
 interface EventWithTargetUser extends PresenceEvent {
   targetUserId?: string;
@@ -90,12 +94,12 @@ export class PresenceClient {
 
   startTyping(userId: string): void {
     const normalizedUserId = this.normalizeRequiredValue(userId, "userId");
-    this.emitSocketEvent(START_TYPING_EVENT, { userId: normalizedUserId });
+    this.emitSocketEvent(SOCKET_EVENT_START_TYPING, { userId: normalizedUserId });
   }
 
   stopTyping(userId: string): void {
     const normalizedUserId = this.normalizeRequiredValue(userId, "userId");
-    this.emitSocketEvent(STOP_TYPING_EVENT, { userId: normalizedUserId });
+    this.emitSocketEvent(SOCKET_EVENT_STOP_TYPING, { userId: normalizedUserId });
   }
 
   private connectSocket(): void {
@@ -115,15 +119,15 @@ export class PresenceClient {
       return;
     }
 
-    this.socket.on("connect", () => {
+    this.socket.on(SOCKET_EVENT_CONNECT, () => {
       this.reconnectDelayMs = INITIAL_RECONNECT_DELAY_MS;
       this.startHeartbeat();
     });
-    this.socket.on("disconnect", () => {
+    this.socket.on(SOCKET_EVENT_DISCONNECT, () => {
       this.stopHeartbeat();
       this.scheduleReconnect();
     });
-    this.socket.on("connect_error", () => {
+    this.socket.on(SOCKET_EVENT_CONNECT_ERROR, () => {
       this.stopHeartbeat();
       this.scheduleReconnect();
     });
@@ -135,10 +139,10 @@ export class PresenceClient {
     }
 
     const presenceEventTypes: PresenceEventType[] = [
-      PRESENCE_ONLINE_EVENT,
-      PRESENCE_OFFLINE_EVENT,
-      TYPING_START_EVENT,
-      TYPING_STOP_EVENT,
+      EVENT_USER_ONLINE,
+      EVENT_USER_OFFLINE,
+      EVENT_TYPING_START,
+      EVENT_TYPING_STOP,
     ];
     presenceEventTypes.forEach((eventType) => {
       this.socket?.on(eventType, (presenceEvent: EventWithTargetUser) => {
@@ -150,7 +154,7 @@ export class PresenceClient {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatIntervalId = setInterval(() => {
-      this.emitSocketEvent(PING_EVENT, undefined);
+      this.emitSocketEvent(SOCKET_EVENT_PING, undefined);
     }, HEARTBEAT_INTERVAL_MS);
   }
 

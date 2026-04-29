@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import type { PresenceClient } from "@pretzel/sdk";
-import type { PresenceEvent, UserPresence } from "@pretzel/types";
+import type { PresenceEvent, PresenceStatus, UserPresence } from "@pretzel/types";
 
 const missingProviderErrorMessage =
   "PresenceProvider is required to use this hook";
@@ -19,6 +19,7 @@ const TYPING_START_EVENT = "typing_start";
 const TYPING_STOP_EVENT = "typing_stop";
 
 const PresenceClientContext = createContext<PresenceClient | null>(null);
+type PresenceState = { status: PresenceStatus; last_seen: string | null };
 
 interface PresenceProviderProps {
   client: PresenceClient;
@@ -41,7 +42,7 @@ export function usePresenceClient(): PresenceClient {
   return presenceClient;
 }
 
-export function usePresence(userId: string): UserPresence {
+export function usePresence(userId: string): PresenceState {
   const client = usePresenceClient();
   const [presence, setPresence] = useState<UserPresence>({
     userId,
@@ -71,17 +72,16 @@ export function usePresence(userId: string): UserPresence {
 
   return useMemo(
     () => ({
-      userId: presence.userId,
       status: presence.status,
       last_seen: presence.last_seen,
     }),
-    [presence.last_seen, presence.status, presence.userId],
+    [presence.last_seen, presence.status],
   );
 }
 
 export function usePresenceBatch(
   userIds: string[],
-): Record<string, UserPresence> {
+): Record<string, PresenceState> {
   const client = usePresenceClient();
   const [presenceByUserId, setPresenceByUserId] = useState<
     Record<string, UserPresence>
@@ -116,7 +116,10 @@ export function usePresenceBatch(
     };
   }, [client, stableUserIds, userIdsSignature]);
 
-  return useMemo(() => ({ ...presenceByUserId }), [presenceByUserId]);
+  return useMemo(
+    () => createPresenceStateRecord(presenceByUserId),
+    [presenceByUserId],
+  );
 }
 
 export function useTyping(userId: string): { isTyping: boolean } {
@@ -188,4 +191,15 @@ function updatePresenceState(
   }
 
   return currentPresence;
+}
+
+function createPresenceStateRecord(
+  presenceByUserId: Record<string, UserPresence>,
+): Record<string, PresenceState> {
+  return Object.fromEntries(
+    Object.entries(presenceByUserId).map(([userId, presence]) => [
+      userId,
+      { status: presence.status, last_seen: presence.last_seen },
+    ]),
+  );
 }
