@@ -13,6 +13,11 @@ function resolveWsPort(): number {
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: true,
+    methods: '*',
+    allowedHeaders: '*',
+  });
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Pretzel WS Service')
     .setDescription(

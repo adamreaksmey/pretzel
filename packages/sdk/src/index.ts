@@ -84,11 +84,23 @@ export class PresenceClient {
 
   async getPresence(userId: string): Promise<UserPresence> {
     const normalizedUserId = this.normalizeRequiredValue(userId, "userId");
-    const response = await this.requestJson<UserPresence>(
-      `/presence/${encodeURIComponent(normalizedUserId)}`,
-      { method: "GET" },
-    );
-    return response;
+    
+    try {
+      const response = await this.requestJson<UserPresence>(
+        `/presence/${encodeURIComponent(normalizedUserId)}`,
+        { method: "GET" },
+      );
+      return response;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("404")) {
+        return {
+          userId,
+          status: "offline",
+          last_seen: null,
+        };
+      }
+      throw new Error(`Failed to get presence for user ${userId}`);
+    }
   }
 
   async getPresenceBatch(userIds: string[]): Promise<UserPresence[]> {
