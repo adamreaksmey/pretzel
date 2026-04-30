@@ -11,13 +11,13 @@ import {
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 import type { Redis } from 'ioredis';
-import { ApiKeyValidationService } from './api-key-validation.service';
+import { ApiKeyValidationService } from '../auth/api-key-validation.service';
 import { PresenceService } from './presence.service';
 import type {
   ConnectionAuthPayload,
   ConnectionContext,
   TenantPresenceEvent,
-} from './ws.types';
+} from './presence.types';
 
 const ROOM_PREFIX = 'tenant';
 const PING_EVENT = 'ping';

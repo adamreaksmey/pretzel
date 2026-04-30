@@ -1,4 +1,4 @@
-import type { SessionIdentity } from './ws.types';
+import type { SessionIdentity } from './presence.types';
 
 type PresenceEventType =
   | 'user_online'

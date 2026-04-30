@@ -16,12 +16,12 @@ import {
   SESSION_HASH_USER_ID_FIELD,
   SESSION_TTL_SECONDS,
   TYPING_TTL_SECONDS,
-} from './constants';
+} from './presence.constants';
 import type {
   ConnectionContext,
   SessionIdentity,
   TenantPresenceEvent,
-} from './ws.types';
+} from './presence.types';
 
 type PresenceEventType = TenantPresenceEvent['type'];
 type EventPublisher = (event: TenantPresenceEvent) => void;

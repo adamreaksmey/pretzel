@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ApiKeyValidationService } from './api-key-validation.service';
-import { PresenceGateway } from './presence.gateway';
-import { PresenceService } from './presence.service';
+import { ApiKeyValidationService } from './auth/api-key-validation.service';
+import { PresenceGateway } from './presence/presence.gateway';
+import { PresenceService } from './presence/presence.service';
 
 @Module({
   imports: [],
