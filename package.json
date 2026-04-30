@@ -13,6 +13,7 @@
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "patch:all": "npm version patch -w @adamthedeveloper/pretzel-types && npm version patch -w @adamthedeveloper/pretzel-sdk && npm version patch -w @adamthedeveloper/pretzel-sdk-react",
     "publish:all": "npm publish -w @adamthedeveloper/pretzel-types --access public && npm publish -w @adamthedeveloper/pretzel-sdk --access public && npm publish -w @adamthedeveloper/pretzel-sdk-react --access public"
   },
   "devDependencies": {
